@@ -1,0 +1,28 @@
+CREATE OR REPLACE PROCEDURE DB_UK_ROADSAFETY.RAW.uk_accident_transformations_proc()
+RETURNS VARCHAR
+LANGUAGE PYTHON
+RUNTIME_VERSION = '3.8'
+PACKAGES = ('snowflake-snowpark-python')
+HANDLER = 'run'
+EXECUTE AS OWNER
+AS
+$$
+def run(session):
+	data=session.table("DB_UK_ROADSAFETY.RAW.UK_ACCIDENT").to_pandas()
+	data['ACCIDENT_INDEX'] = data['ACCIDENT_INDEX'].replace('2.01E+12','2010000000000')
+	data.loc[ data['CARRIAGEWAY_HAZARDS'] == "None",'CARRIAGEWAY_HAZARDS' ] = "No_Carriageway_Hazards"
+	data['LOCATION_EASTING_OSGR'].fillna(value = 0, inplace = True)
+	data['LONGITUDE'].fillna(value = 0, inplace = True)
+	data['TIME'].fillna(value = '00:00', inplace = True)
+	data['PEDESTRIAN_CROSSING_HUMAN_CONTROL'].fillna(value = 'None', inplace = True)
+	data['PEDESTRIAN_CROSSING_PHYSICAL_FACILITIES'].fillna(value = 'None', inplace = True)
+	data['LSOA_OF_ACCIDENT_LOCATION'].fillna(value = 'None', inplace = True)
+	int_cols =['LOCATION_EASTING_OSGR','LOCATION_NORTHING_OSGR','POLICE_FORCE','ACCIDENT_SEVERITY','NUMBER_OF_VEHICLES','NUMBER_OF_CASUALTIES','DAY_OF_WEEK','LOCAL_AUTHORITY_DISTRICT','1ST_ROAD_CLASS','1ST_ROAD_NUMBER','SPEED_LIMIT','2ND_ROAD_CLASS','2ND_ROAD_NUMBER','URBAN_OR_RURAL_AREA','YEAR']
+	data[int_cols] = data[int_cols].astype(float).astype('Int64')
+	flt_cols = ['LONGITUDE','LATITUDE']
+	data[flt_cols] = data[flt_cols].astype(float)
+	data = data.drop_duplicates()
+	res=session.create_dataframe(data)
+	res.write.mode("overwrite").saveAsTable("DB_UK_ROADSAFETY.RAW.UK_ACCIDENT")
+	return "success";
+$$;
